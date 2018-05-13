@@ -5,3 +5,5 @@ __pycache__/
 
 # Demo file
 demo.py
+
+.vscode
