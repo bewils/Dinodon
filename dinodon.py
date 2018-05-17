@@ -107,18 +107,43 @@ def check_blank_line():
 
 # All checks
 
-_all_checks = {
+All_Checks = {
     "physical_line": [
-        check_tabs, 
-        check_trailing_whitespace, 
-        check_line_length, 
+        check_tabs,
+        check_trailing_whitespace,
+        check_line_length,
         check_extraneous_whitespace],
     "logical_line": [],
     "ast": []
 }
 
 import sys
+import copy
 import dinodon_log as log
+
+def _check_physical_lines(lint_file):
+    with open(lint_file, 'r') as f:
+        current_checks = copy.deepcopy(All_Checks["physical_line"])
+        for (line_number, line) in enumerate(f.readlines()):
+            real_line = line.strip()
+            # config custom lint
+            if real_line.startswith("# dinodon:"):
+                real_line = real_line[10:]
+                if real_line.startswith("disable"):
+                    function_names = real_line.split(" ")[1:]
+                    remove_functions = filter(lambda func: func.__name__ in function_names, \
+                        All_Checks["physical_line"])
+                    current_checks = list(set(current_checks) - set(remove_functions))
+                if real_line.startswith("enable"):
+                    function_names = real_line.split(" ")[1:]
+                    add_functions = filter(lambda func: func.__name__ in function_names, \
+                        All_Checks["physical_line"])
+                    current_checks = list(set(current_checks) | set(add_functions))
+
+            for check in current_checks:
+                result = check(line, line_number + 1)
+                if result is not None:
+                    print(result)
 
 if __name__ == '__main__':
     # lint_files = list(filter(lambda parm: "dinodon" not in parm and parm.endswith(".py"), sys.argv))
@@ -127,9 +152,9 @@ if __name__ == '__main__':
     if len(lint_files) == 0:
         log.error("no file to lint!")
 
-    with open(lint_files[0], 'r') as f:
-        for (line_number, line) in enumerate(f.readlines()):
-            for check in _all_checks["physical_line"]:
-                result = check(line, line_number + 1)
-                if result is not None:
-                    print(result)
+    # dinodon:disable check_line_length
+    a = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    # dinodon:enable check_line_length
+    b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+    _check_physical_lines(lint_files[0])
