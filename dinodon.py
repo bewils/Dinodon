@@ -20,7 +20,7 @@ Type_Extraneous_Whitespace = 5
 
 #
 # Check functions:
-# Return type: (Type: int, 
+# Return type: tuple : (Type: int, 
 #               Level: int {warning/error},
 #               Line info: (int, int) {line number/offset},
 #               Description: str)
@@ -77,6 +77,10 @@ def check_extraneous_whitespace(physical_line, line_number):
     # Test case:
     # spam( ham[1], {eggs: 2})
     
+    # Ignore comment
+    if physical_line.strip().startswith("#"):
+        return
+
     for match_obj in Extraneous_Whitespace_Regex.finditer(physical_line):
         text = match_obj.group()
         # [({\s
@@ -101,6 +105,18 @@ def check_blank_line():
 
 # Check AST
 
+# All checks
+
+_all_checks = {
+    "physical_line": [
+        check_tabs, 
+        check_trailing_whitespace, 
+        check_line_length, 
+        check_extraneous_whitespace],
+    "logical_line": [],
+    "ast": []
+}
+
 import sys
 import dinodon_log as log
 
@@ -111,13 +127,9 @@ if __name__ == '__main__':
     if len(lint_files) == 0:
         log.error("no file to lint!")
 
-    # text = "spam( ham[1], {eggs: 2})"
-
-    # for line_number, line in  enumerate(text.split("\n")):
-    #     print(check_extraneous_whitespace(line, line_number))
-
     with open(lint_files[0], 'r') as f:
         for (line_number, line) in enumerate(f.readlines()):
-            result = check_line_length(line, line_number + 1)
-            if result is not None:
-                print(result)
+            for check in _all_checks["physical_line"]:
+                result = check(line, line_number + 1)
+                if result is not None:
+                    print(result)
