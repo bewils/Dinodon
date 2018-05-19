@@ -1,6 +1,8 @@
 import re
 from enum import Enum
 
+Version = "0.1.0"
+
 # Regex types
 
 Indent_Regex = re.compile('(\t+)')
@@ -223,6 +225,9 @@ def _check_logical_lines(lint_file):
 # Log
 
 class Log:
+    def info(message):
+        print(message)
+
     def error(message):
         print("Error: %s" % message)
 
@@ -241,18 +246,46 @@ def _log_result(result):
     else:
         Log.error(message)
 
+# Command Line Options
+
+def _show_help_info():
+    Log.info("""
+Usage:
+    python3 dinodon.py [files] [options]
+Options:
+    --help: Display general or command-specific help
+    --version: Display the current version of dinodon
+    """)
+
+def _show_version():
+    Log.info(Version)
 
 if __name__ == '__main__':
-    # lint_files = list(filter(lambda parm: "dinodon" not in parm and parm.endswith(".py"), sys.argv))
-    lint_files = list(filter(lambda parm: parm.endswith(".py"), sys.argv))
+    lint_files = list(filter(lambda parm: "dinodon" not in parm and parm.endswith(".py"), sys.argv))
+    options = list(filter(lambda parm: not parm.endswith(".py"), sys.argv))
 
-    if len(lint_files) == 0:
-        log.error("no file to lint!")
+    if len(options) > 0:
+        is_linting = True
 
-    # dinodon:disable check_line_length
-    a = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    # dinodon:enable check_line_length
-    b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        # 1. self check
+        if "--self-check" == options[0]:
+            _check_physical_lines("dinodon.py")
+            _check_logical_lines("dinodon.py")
 
-    _check_physical_lines(lint_files[0])
-    _check_logical_lines(lint_files[0])
+        # 2. show help
+        if "--help" == options[0]:
+            _show_help_info()
+            is_linting = False
+
+        # 3. show version
+        if "--version" == options[0]:
+            _show_version()
+            is_linting = False
+
+    else:
+        if len(lint_files) != 0:
+            _check_physical_lines(lint_files[0])
+            _check_logical_lines(lint_files[0])
+        else:
+            Log.error("no file to lint!")
+
