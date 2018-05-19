@@ -6,13 +6,12 @@ from enum import Enum
 Indent_Regex = re.compile('(\t+)')
 Extraneous_Whitespace_Regex = re.compile('[\[({] | [\]});:]')
 
-# Levels
+# Violation
 
 class ViolationLevel(Enum):
     Warning = 0
     Error = 1
 
-# Types
 
 class ViolationType(Enum):
     Has_Tab = 1
@@ -21,6 +20,9 @@ class ViolationType(Enum):
     Line_Too_Long = 4
     Extraneous_Whitespace = 5
     Multiple_Import = 6
+    Blank_Line_After_Decorator = 7
+    Not_Enough_Blank_Lines = 8
+    Too_Many_Blank_Lines = 9
 
 #
 # Check functions:
@@ -31,7 +33,6 @@ class ViolationType(Enum):
 #
 
 # Check physical lines
-
 def check_tabs(physical_line, line_number):
     # Test case:
     # if True:\n\tb = 1\na = 2
@@ -80,6 +81,11 @@ def check_line_length(physical_line, line_number):
 
 # Check logical lines
 
+_previous_logical = {
+    "previous_line": "",
+    "blank_lines": 0,
+    "previous_code_segment": ""}
+
 def check_extraneous_whitespace(logical_line, line_number):
     # Test case:
     # aaa( aa[1], {bb: 2})
@@ -103,6 +109,7 @@ def check_extraneous_whitespace(logical_line, line_number):
             return (ViolationLevel.Error, ViolationType.Extraneous_Whitespace, \
                 (line_number, offset), "Whitespace before %s" % char)
 
+
 def check_multiple_import(logical_line, line_number):
     # Test case:
     # import re, copy
@@ -111,6 +118,28 @@ def check_multiple_import(logical_line, line_number):
         if "," in logical_line:
             return (ViolationLevel.Error, ViolationType.Multiple_Import, \
                 (line_number, 0), "Multiple import in one line")
+
+
+def check_correct_blank_lines(logical_line, line_number):
+    # Test case:
+    # def a():\n    return\ndef b(): \n    return 1
+    
+    if logical_line == "\n":
+        previous_line = _previous_logical["previous_line"].strip()
+        if previous_line.startswith("@"):
+            return (ViolationLevel.Error, ViolationType.Blank_Line_After_Decorator, \
+                (line_number, 0), "Blank line after decorator")
+
+    previous_code_segment = _previous_logical["previous_code_segment"]
+    blank_lines = _previous_logical["blank_lines"]
+    if logical_line.startswith("def") or logical_line.startswith("class"):
+        if previous_code_segment == "function" or previous_code_segment == "class":
+            if blank_lines < 2:
+                return (ViolationLevel.Error, ViolationType.Not_Enough_Blank_Lines, \
+                    (line_number, 0), "Expected 2 blank lines, found %d" % blank_lines)
+            if blank_lines > 2:
+                return (ViolationLevel.Error, ViolationType.Too_Many_Blank_Lines, \
+                    (line_number, 0), "Expected 2 blank lines, found %d" % blank_lines)
 
 # Check AST
 
@@ -123,7 +152,8 @@ All_Checks = {
         check_line_length],
     "logical_line": [
         check_extraneous_whitespace,
-        check_multiple_import],
+        check_multiple_import,
+        check_correct_blank_lines],
     "ast": []
 }
 
@@ -168,11 +198,26 @@ def _check_logical_lines(lint_file):
         current_checks = copy.deepcopy(All_Checks["logical_line"])
         for (line_number, line) in enumerate(f.readlines()):
             current_checks = _update_current_checks("logical_line", line, current_checks)
-
+            
             for check in current_checks:
                 result = check(line, line_number + 1)
                 if result is not None:
                     _log_result(result)
+
+            # set common logical info
+            _previous_logical["previous_line"] = line
+
+            if line == "\n":
+                _previous_logical["blank_lines"] += 1
+            elif not line.strip().startswith("#"):
+                _previous_logical["blank_lines"] = 0
+
+            if line.startswith("def"):
+                _previous_logical["previous_code_segment"] = "function"
+            elif line.startswith("class"):
+                _previous_logical["previous_code_segment"] = "class"
+            elif line != "\n" and line[0] != " ":
+                _previous_logical["previous_code_segment"] = "other"
 
 
 # Log
@@ -183,6 +228,7 @@ class Log:
 
     def warning(message):
         print("Warning: %s" % warning)
+
 
 def _log_result(result):
     violation_level, violation_type, (line_number, column), description = result
@@ -205,6 +251,7 @@ if __name__ == '__main__':
 
     # dinodon:disable check_line_length
     a = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    # dinodon:enable check_line_length
     b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
     _check_physical_lines(lint_files[0])
