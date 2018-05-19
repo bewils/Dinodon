@@ -20,6 +20,7 @@ class ViolationType(Enum):
     Trailing_Whitespace = 3
     Line_Too_Long = 4
     Extraneous_Whitespace = 5
+    Multiple_Import = 6
 
 #
 # Check functions:
@@ -77,15 +78,17 @@ def check_line_length(physical_line, line_number):
             (line_number, 0), "Line too long")
 
 
-def check_extraneous_whitespace(physical_line, line_number):
+# Check logical lines
+
+def check_extraneous_whitespace(logical_line, line_number):
     # Test case:
-    # spam( ham[1], {eggs: 2})
+    # aaa( aa[1], {bb: 2})
     
     # Ignore comment
-    if physical_line.strip().startswith("#"):
+    if logical_line.strip().startswith("#"):
         return
 
-    for match_obj in Extraneous_Whitespace_Regex.finditer(physical_line):
+    for match_obj in Extraneous_Whitespace_Regex.finditer(logical_line):
         text = match_obj.group()
         # [({\s
         if text.endswith(" "):
@@ -100,49 +103,59 @@ def check_extraneous_whitespace(physical_line, line_number):
             return (ViolationLevel.Error, ViolationType.Extraneous_Whitespace, \
                 (line_number, offset), "Whitespace before %s" % char)
 
+def check_multiple_import(logical_line, line_number):
+    # Test case:
+    # import re, copy
 
-# Check logical lines
-
-def check_blank_line():
-
-    return
+    if logical_line.startswith("import"):
+        if "," in logical_line:
+            return (ViolationLevel.Error, ViolationType.Multiple_Import, \
+                (line_number, 0), "Multiple import in one line")
 
 # Check AST
 
-# All checks
+# Core checks
 
 All_Checks = {
     "physical_line": [
         check_tabs,
         check_trailing_whitespace,
-        check_line_length,
-        check_extraneous_whitespace],
+        check_line_length],
     "logical_line": [
-        check_blank_line],
+        check_extraneous_whitespace,
+        check_multiple_import],
     "ast": []
 }
 
 import sys
 import copy
 
+# use `# dinodon:disable xxx` to disable a specific rule
+# use `# dinodon:enable xxx` to enable a specific rule
+def _update_current_checks(lintType, line, current_checks):
+    real_line = line.strip()
+
+    if real_line.startswith("# dinodon:"):
+        real_line = real_line[10:]
+        if real_line.startswith("disable"):
+            function_names = real_line.split(" ")[1:]
+            remove_functions = filter(lambda func: func.__name__ in function_names, \
+                All_Checks[lintType])
+            return list(set(current_checks) - set(remove_functions))
+        if real_line.startswith("enable"):
+            function_names = real_line.split(" ")[1:]
+            add_functions = filter(lambda func: func.__name__ in function_names, \
+                All_Checks[lintType])
+            return list(set(current_checks) | set(add_functions))
+    else:
+        return current_checks
+
+
 def _check_physical_lines(lint_file):
     with open(lint_file, 'r') as f:
         current_checks = copy.deepcopy(All_Checks["physical_line"])
         for (line_number, line) in enumerate(f.readlines()):
-            real_line = line.strip()
-            # config custom lint
-            if real_line.startswith("# dinodon:"):
-                real_line = real_line[10:]
-                if real_line.startswith("disable"):
-                    function_names = real_line.split(" ")[1:]
-                    remove_functions = filter(lambda func: func.__name__ in function_names, \
-                        All_Checks["physical_line"])
-                    current_checks = list(set(current_checks) - set(remove_functions))
-                if real_line.startswith("enable"):
-                    function_names = real_line.split(" ")[1:]
-                    add_functions = filter(lambda func: func.__name__ in function_names, \
-                        All_Checks["physical_line"])
-                    current_checks = list(set(current_checks) | set(add_functions))
+            current_checks = _update_current_checks("physical_line", line, current_checks)
 
             for check in current_checks:
                 result = check(line, line_number + 1)
@@ -150,25 +163,32 @@ def _check_physical_lines(lint_file):
                     _log_result(result)
 
 
-def _check_logical_lines():
+def _check_logical_lines(lint_file):
+    with open(lint_file, 'r') as f:
+        current_checks = copy.deepcopy(All_Checks["logical_line"])
+        for (line_number, line) in enumerate(f.readlines()):
+            current_checks = _update_current_checks("logical_line", line, current_checks)
 
-    return
+            for check in current_checks:
+                result = check(line, line_number + 1)
+                if result is not None:
+                    _log_result(result)
 
 
 # Log
 
 class Log:
     def error(message):
-        print("Error %s" % message)
+        print("Error: %s" % message)
 
     def warning(message):
-        print("Warning %s" % warning)
+        print("Warning: %s" % warning)
 
 def _log_result(result):
-    violation_level, violation_type, (line_number, offset), description = result
+    violation_level, violation_type, (line_number, column), description = result
 
-    message = "%d, line %d, offset %d \n %s" \
-        % (violation_type.value, line_number, offset, description)
+    message = "line %d, column %d <%s>" \
+        % (line_number, column, description)
 
     if violation_level == ViolationLevel.Warning:
         Log.warning(message)
@@ -185,7 +205,7 @@ if __name__ == '__main__':
 
     # dinodon:disable check_line_length
     a = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    # dinodon:enable check_line_length
     b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
     _check_physical_lines(lint_files[0])
+    _check_logical_lines(lint_files[0])
