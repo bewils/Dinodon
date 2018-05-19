@@ -117,13 +117,13 @@ All_Checks = {
         check_trailing_whitespace,
         check_line_length,
         check_extraneous_whitespace],
-    "logical_line": [],
+    "logical_line": [
+        check_blank_line],
     "ast": []
 }
 
 import sys
 import copy
-import dinodon_log as log
 
 def _check_physical_lines(lint_file):
     with open(lint_file, 'r') as f:
@@ -149,6 +149,21 @@ def _check_physical_lines(lint_file):
                 if result is not None:
                     _log_result(result)
 
+
+def _check_logical_lines():
+
+    return
+
+
+# Log
+
+class Log:
+    def error(message):
+        print("Error %s" % message)
+
+    def warning(message):
+        print("Warning %s" % warning)
+
 def _log_result(result):
     violation_level, violation_type, (line_number, offset), description = result
 
@@ -156,9 +171,10 @@ def _log_result(result):
         % (violation_type.value, line_number, offset, description)
 
     if violation_level == ViolationLevel.Warning:
-        log.warning(message)
+        Log.warning(message)
     else:
-        log.error(message)
+        Log.error(message)
+
 
 if __name__ == '__main__':
     # lint_files = list(filter(lambda parm: "dinodon" not in parm and parm.endswith(".py"), sys.argv))
