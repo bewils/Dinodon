@@ -35,6 +35,7 @@ class ViolationType(Enum):
 #
 
 # Check physical lines
+
 def check_tabs(physical_line, line_number):
     # Test case:
     # if True:\n\tb = 1\na = 2
@@ -135,6 +136,7 @@ def check_correct_blank_lines(logical_line, line_number):
     previous_code_segment = _previous_logical["previous_code_segment"]
     blank_lines = _previous_logical["blank_lines"]
     if logical_line.startswith("def") or logical_line.startswith("class"):
+        # print(logical_line, previous_code_segment, blank_lines)
         if previous_code_segment == "function" or previous_code_segment == "class":
             if blank_lines < 2:
                 return (ViolationLevel.Error, ViolationType.Not_Enough_Blank_Lines, \
@@ -184,6 +186,8 @@ def _update_current_checks(lintType, line, current_checks):
 
 
 def _check_physical_lines(lint_file):
+    results = []
+
     with open(lint_file, 'r') as f:
         current_checks = copy.deepcopy(All_Checks["physical_line"])
         for (line_number, line) in enumerate(f.readlines()):
@@ -192,10 +196,14 @@ def _check_physical_lines(lint_file):
             for check in current_checks:
                 result = check(line, line_number + 1)
                 if result is not None:
-                    _log_result(result)
+                    results.append(result)
+
+    return results
 
 
 def _check_logical_lines(lint_file):
+    results = []
+
     with open(lint_file, 'r') as f:
         current_checks = copy.deepcopy(All_Checks["logical_line"])
         for (line_number, line) in enumerate(f.readlines()):
@@ -204,7 +212,7 @@ def _check_logical_lines(lint_file):
             for check in current_checks:
                 result = check(line, line_number + 1)
                 if result is not None:
-                    _log_result(result)
+                    results.append(result)
 
             # set common logical info
             _previous_logical["previous_line"] = line
@@ -221,8 +229,19 @@ def _check_logical_lines(lint_file):
             elif line != "\n" and line[0] != " ":
                 _previous_logical["previous_code_segment"] = "other"
 
+    return results
+
+
+def _check_single_file(lint_file):
+    physical_results = _check_physical_lines(lint_file)
+    logical_results = _check_logical_lines(lint_file)
+
+    total_results = physical_results + logical_results
+    for result in total_results:
+        _log_result(result)
 
 # Log
+
 
 class Log:
     def info(message):
@@ -246,46 +265,53 @@ def _log_result(result):
     else:
         Log.error(message)
 
-# Command Line Options
+# Command Line
 
 def _show_help_info():
-    Log.info("""
-Usage:
-    python3 dinodon.py [files] [options]
-Options:
-    --help: Display general or command-specific help
-    --version: Display the current version of dinodon
-    """)
+    Log.info("""  Usage:
+    python3 dinodon.py [command] [options] [files]
+  Command:
+    self-check: Run lint for dinodon itself
+    help: Display general or command-specific help
+    version: Display the current version of dinodon
+    run: Run lint for specific file""")
+
 
 def _show_version():
     Log.info(Version)
 
 if __name__ == '__main__':
-    lint_files = list(filter(lambda parm: "dinodon" not in parm and parm.endswith(".py"), sys.argv))
-    options = list(filter(lambda parm: not parm.endswith(".py"), sys.argv))
+    lint_files = []
+    commands = []
+    options = []
 
-    if len(options) > 0:
-        is_linting = True
+    if "dinodon.py" in sys.argv:
+        sys.argv.remove("dinodon.py")
 
+    for parm in sys.argv:
+        if parm.endswith(".py") and "dinodon" not in parm:
+            lint_files.append(parm)
+        elif parm.startswith("--"):
+            options.append(parm)
+        else:
+            commands.append(parm)
+
+    if len(commands) > 0:
         # 1. self check
-        if "--self-check" == options[0]:
-            _check_physical_lines("dinodon.py")
-            _check_logical_lines("dinodon.py")
+        if "self-check" == commands[0]:
+            _check_single_file("dinodon.py")
 
         # 2. show help
-        if "--help" == options[0]:
+        if "help" == commands[0]:
             _show_help_info()
-            is_linting = False
 
         # 3. show version
-        if "--version" == options[0]:
+        if "version" == commands[0]:
             _show_version()
-            is_linting = False
+
+        # 4. run lint
+        if "run" == commands[0]:
+            print()
 
     else:
-        if len(lint_files) != 0:
-            _check_physical_lines(lint_files[0])
-            _check_logical_lines(lint_files[0])
-        else:
-            Log.error("no file to lint!")
-
+        Log.error("Please run dinodon with a command")
