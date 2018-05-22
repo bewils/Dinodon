@@ -1,30 +1,31 @@
 import re
 from enum import Enum
+import ast
 
-Version = "0.1.0"
+VERSION = "0.1.0"
 
 # Regex types
 
-Indent_Regex = re.compile('(\t+)')
-Extraneous_Whitespace_Regex = re.compile('[\[({] | [\]});:]')
+INDENT_REGEX = re.compile('(\t+)')
+EXTRANEOUS_WHITESPACE_REGEX = re.compile('[\[({] | [\]});:]')
 
 # Violation
 
 class ViolationLevel(Enum):
-    Warning = 0
-    Error = 1
+    WARNING = 0
+    ERROR = 1
 
 
 class ViolationType(Enum):
-    Has_Tab = 1
-    Blank_Line_Whitespace = 2
-    Trailing_Whitespace = 3
-    Line_Too_Long = 4
-    Extraneous_Whitespace = 5
-    Multiple_Import = 6
-    Blank_Line_After_Decorator = 7
-    Not_Enough_Blank_Lines = 8
-    Too_Many_Blank_Lines = 9
+    HAS_TAB = 1
+    BLANK_LINE_WHITESPACE = 2
+    TRAILING_WHITESPACE = 3
+    LINE_TOO_LONG = 4
+    EXTRANEOUS_WHITESPACE = 5
+    MULTIPLE_IMPORT = 6
+    BLANK_LINE_AFTER_DECORATOR = 7
+    NOT_ENOUGH_BLANK_LINES = 8
+    TOO_MANY_BLANK_LINES = 9
 
 #
 # Check functions:
@@ -40,10 +41,10 @@ def check_tabs(physical_line, line_number):
     # Test case:
     # if True:\n\tb = 1\na = 2
 
-    match_obj = Indent_Regex.search(physical_line)
+    match_obj = INDENT_REGEX.search(physical_line)
     if match_obj is not None:
         offset = match_obj.span()[0]
-        return (ViolationLevel.Error, ViolationType.Has_Tab, (line_number, offset),
+        return (ViolationLevel.ERROR, ViolationType.HAS_TAB, (line_number, offset),
             "Indentation contains tabs")
 
 
@@ -55,10 +56,10 @@ def check_trailing_whitespace(physical_line, line_number):
     real_line = physical_line.rstrip(whitespace_charset)
     if real_line != physical_line:
         if len(real_line) == 0:
-            return (ViolationLevel.Error, ViolationType.Blank_Line_Whitespace, \
+            return (ViolationLevel.ERROR, ViolationType.BLANK_LINE_WHITESPACE, \
                 (line_number, 0), "Blank line contains whitespace")
         else:
-            return (ViolationLevel.Error, ViolationType.Trailing_Whitespace, \
+            return (ViolationLevel.ERROR, ViolationType.TRAILING_WHITESPACE, \
                 (line_number, len(real_line)), "Line with trailing whitespace")
 
 
@@ -78,7 +79,7 @@ def check_line_length(physical_line, line_number):
         if real_line.startswith("#"):
             return
         
-        return (ViolationLevel.Error, ViolationType.Line_Too_Long, \
+        return (ViolationLevel.ERROR, ViolationType.LINE_TOO_LONG, \
             (line_number, 0), "Line too long")
 
 
@@ -87,9 +88,10 @@ def check_line_length(physical_line, line_number):
 _previous_logical = {
     "previous_line": "",
     "blank_lines": 0,
-    "previous_code_segment": ""}
+    "previous_code_segment": ""
+}
 
-def check_extraneous_whitespace(logical_line, line_number):
+def check_extraneous_whitespace(logical_line, line_number, extarParams):
     # Test case:
     # aaa( aa[1], {bb: 2})
     
@@ -97,59 +99,63 @@ def check_extraneous_whitespace(logical_line, line_number):
     if logical_line.strip().startswith("#"):
         return
 
-    for match_obj in Extraneous_Whitespace_Regex.finditer(logical_line):
+    for match_obj in EXTRANEOUS_WHITESPACE_REGEX.finditer(logical_line):
         text = match_obj.group()
         # [({\s
         if text.endswith(" "):
             offset = match_obj.span()[0]
             char = text[0]
-            return (ViolationLevel.Error, ViolationType.Extraneous_Whitespace, \
+            return (ViolationLevel.ERROR, ViolationType.EXTRANEOUS_WHITESPACE, \
                 (line_number, offset), "Whitespace after %s" % char)
         # \s])}:; 
         else:
             offset = match_obj.span()[1] - 1
             char = text[-1]
-            return (ViolationLevel.Error, ViolationType.Extraneous_Whitespace, \
+            return (ViolationLevel.ERROR, ViolationType.EXTRANEOUS_WHITESPACE, \
                 (line_number, offset), "Whitespace before %s" % char)
 
 
-def check_multiple_import(logical_line, line_number):
+def check_multiple_import(logical_line, line_number, extarParams):
     # Test case:
     # import re, copy
 
     if logical_line.startswith("import"):
         if "," in logical_line:
-            return (ViolationLevel.Error, ViolationType.Multiple_Import, \
+            return (ViolationLevel.ERROR, ViolationType.MULTIPLE_IMPORT, \
                 (line_number, 0), "Multiple import in one line")
 
 
-def check_correct_blank_lines(logical_line, line_number):
+def check_correct_blank_lines(logical_line, line_number, extar_params):
     # Test case:
     # def a():\n    return\ndef b(): \n    return 1
     
     if logical_line == "\n":
-        previous_line = _previous_logical["previous_line"].strip()
+        previous_line = extar_params["previous_line"].strip()
         if previous_line.startswith("@"):
-            return (ViolationLevel.Error, ViolationType.Blank_Line_After_Decorator, \
+            return (ViolationLevel.ERROR, ViolationType.BLANK_LINE_AFTER_DECORATOR, \
                 (line_number, 0), "Blank line after decorator")
 
-    previous_code_segment = _previous_logical["previous_code_segment"]
-    blank_lines = _previous_logical["blank_lines"]
+    previous_code_segment = extar_params["previous_code_segment"]
+    blank_lines = extar_params["blank_lines"]
     if logical_line.startswith("def") or logical_line.startswith("class"):
-        # print(logical_line, previous_code_segment, blank_lines)
         if previous_code_segment == "function" or previous_code_segment == "class":
             if blank_lines < 2:
-                return (ViolationLevel.Error, ViolationType.Not_Enough_Blank_Lines, \
+                return (ViolationLevel.ERROR, ViolationType.NOT_ENOUGH_BLANK_LINES, \
                     (line_number, 0), "Expected 2 blank lines, found %d" % blank_lines)
             if blank_lines > 2:
-                return (ViolationLevel.Error, ViolationType.Too_Many_Blank_Lines, \
+                return (ViolationLevel.ERROR, ViolationType.TOO_MANY_BLANK_LINES, \
                     (line_number, 0), "Expected 2 blank lines, found %d" % blank_lines)
 
 # Check AST
 
+def check_naming(node):
+    # Test case:
+    # 
+    return
+
 # Core checks
 
-All_Checks = {
+ALL_CHECKS = {
     "physical_line": [
         check_tabs,
         check_trailing_whitespace,
@@ -166,20 +172,20 @@ import copy
 
 # use `# dinodon:disable xxx` to disable a specific rule
 # use `# dinodon:enable xxx` to enable a specific rule
-def _update_current_checks(lintType, line, current_checks):
+def _update_current_checks(lint_type, line, current_checks):
     real_line = line.strip()
 
     if real_line.startswith("# dinodon:"):
         real_line = real_line[10:]
         if real_line.startswith("disable"):
             function_names = real_line.split(" ")[1:]
-            remove_functions = filter(lambda func: func.__name__ in function_names, \
-                All_Checks[lintType])
+            remove_functions = [func for func in ALL_CHECKS[lint_type] \
+                if func.__name__ in function_names]
             return list(set(current_checks) - set(remove_functions))
         if real_line.startswith("enable"):
             function_names = real_line.split(" ")[1:]
-            add_functions = filter(lambda func: func.__name__ in function_names, \
-                All_Checks[lintType])
+            add_functions = [func for func in ALL_CHECKS[lint_type] \
+                if func.__name__ in function_names]
             return list(set(current_checks) | set(add_functions))
     else:
         return current_checks
@@ -189,12 +195,13 @@ def _check_physical_lines(lint_file):
     results = []
 
     with open(lint_file, 'r') as f:
-        current_checks = copy.deepcopy(All_Checks["physical_line"])
-        for (line_number, line) in enumerate(f.readlines()):
+        current_checks = copy.deepcopy(ALL_CHECKS["physical_line"])
+        for (index, line) in enumerate(f.readlines()):
+            line_number = index + 1
             current_checks = _update_current_checks("physical_line", line, current_checks)
 
             for check in current_checks:
-                result = check(line, line_number + 1)
+                result = check(line, line_number)
                 if result is not None:
                     results.append(result)
 
@@ -205,12 +212,13 @@ def _check_logical_lines(lint_file):
     results = []
 
     with open(lint_file, 'r') as f:
-        current_checks = copy.deepcopy(All_Checks["logical_line"])
-        for (line_number, line) in enumerate(f.readlines()):
+        current_checks = copy.deepcopy(ALL_CHECKS["logical_line"])
+        for (index, line) in enumerate(f.readlines()):
+            line_number = index + 1
             current_checks = _update_current_checks("logical_line", line, current_checks)
             
             for check in current_checks:
-                result = check(line, line_number + 1)
+                result = check(line, line_number, _previous_logical)
                 if result is not None:
                     results.append(result)
 
@@ -232,16 +240,40 @@ def _check_logical_lines(lint_file):
     return results
 
 
+def _check_ast(lint_file):
+    results = []
+
+    with open(lint_file, 'r') as f:
+        current_checks = copy.deepcopy(ALL_CHECKS["logical_line"])
+
+        code = f.read()
+        root_node = ast.parse(code)
+
+        custom_configs = []
+        for (index, line) in enumerate(code.split("\n")):
+            line_number = index + 1
+            real_line = line.strip()
+            if real_line.startswith("# dinodon:"):
+                custom_configs.append((line_number, line))
+
+        stack = [root_node]
+
+
+    return results
+
+
 def _check_single_file(lint_file):
     physical_results = _check_physical_lines(lint_file)
     logical_results = _check_logical_lines(lint_file)
+    ast_results = _check_ast(lint_file)
 
-    total_results = physical_results + logical_results
+    total_results = physical_results + logical_results + ast_results
+    # sort by line number
+    total_results.sort(key=lambda result: result[2][0])
     for result in total_results:
         _log_result(result)
 
 # Log
-
 
 class Log:
     def info(message):
@@ -251,7 +283,7 @@ class Log:
         print("Error: %s" % message)
 
     def warning(message):
-        print("Warning: %s" % warning)
+        print("Warning: %s" % message)
 
 
 def _log_result(result):
@@ -260,7 +292,7 @@ def _log_result(result):
     message = "line %d, column %d <%s>" \
         % (line_number, column, description)
 
-    if violation_level == ViolationLevel.Warning:
+    if violation_level == ViolationLevel.WARNING:
         Log.warning(message)
     else:
         Log.error(message)
@@ -278,7 +310,7 @@ def _show_help_info():
 
 
 def _show_version():
-    Log.info(Version)
+    Log.info(VERSION)
 
 if __name__ == '__main__':
     lint_files = []
@@ -289,7 +321,7 @@ if __name__ == '__main__':
         sys.argv.remove("dinodon.py")
 
     for parm in sys.argv:
-        if parm.endswith(".py") and "dinodon" not in parm:
+        if parm.endswith(".py") and not parm.startswith("dinodon"):
             lint_files.append(parm)
         elif parm.startswith("--"):
             options.append(parm)
