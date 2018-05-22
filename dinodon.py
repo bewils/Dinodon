@@ -151,7 +151,9 @@ def check_correct_blank_lines(logical_line, line_number, extar_params):
 def check_naming(node):
     # Test case:
     # 
-    return
+    if isinstance(node, ast.Assign):
+        return (ViolationLevel.ERROR, ViolationType.TOO_MANY_BLANK_LINES, \
+                    (node.lineno, 0), "Assign")
 
 # Core checks
 
@@ -164,7 +166,7 @@ ALL_CHECKS = {
         check_extraneous_whitespace,
         check_multiple_import,
         check_correct_blank_lines],
-    "ast": []
+    "ast": [check_naming]
 }
 
 import sys
@@ -244,7 +246,7 @@ def _check_ast(lint_file):
     results = []
 
     with open(lint_file, 'r') as f:
-        current_checks = copy.deepcopy(ALL_CHECKS["logical_line"])
+        current_checks = copy.deepcopy(ALL_CHECKS["ast"])
 
         code = f.read()
         root_node = ast.parse(code)
@@ -257,7 +259,22 @@ def _check_ast(lint_file):
                 custom_configs.append((line_number, line))
 
         stack = [root_node]
+        while len(stack):
+            node = stack.pop()
 
+            children = list(ast.iter_child_nodes(node))
+            children.reverse()
+            stack += children
+            
+            if len(custom_configs) and hasattr(node, "lineno") \
+                and custom_configs[0][0] < node.lineno:
+                config_line = custom_configs.pop(0)
+                current_checks = _update_current_checks("ast", config_line[1], current_checks)
+
+            for check in current_checks:
+                result = check(node)
+                if result is not None:
+                    results.append(result)
 
     return results
 
@@ -281,6 +298,7 @@ class Log:
 
     def error(message):
         print("Error: %s" % message)
+        # return
 
     def warning(message):
         print("Warning: %s" % message)
@@ -344,6 +362,7 @@ if __name__ == '__main__':
         # 4. run lint
         if "run" == commands[0]:
             print()
-
+    
     else:
-        Log.error("Please run dinodon with a command")
+        # Log.error("Please run dinodon with a command")
+        _check_single_file("dinodon.py")
