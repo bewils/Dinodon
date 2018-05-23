@@ -249,7 +249,7 @@ def _check_physical_lines(lint_file):
         for (index, line) in enumerate(f.readlines()):
             line_number = index + 1
             current_checks = _update_current_checks("physical_line", line, current_checks)
-
+            
             for check in current_checks:
                 result = check(line, line_number)
                 if result is not None:
@@ -335,18 +335,6 @@ def _check_ast(lint_file):
 
     return results
 
-
-def _check_single_file(lint_file):
-    physical_results = _check_physical_lines(lint_file)
-    logical_results = _check_logical_lines(lint_file)
-    ast_results = _check_ast(lint_file)
-
-    total_results = physical_results + logical_results + ast_results
-    # sort by line number
-    total_results.sort(key=lambda result: result[2][0])
-    for result in total_results:
-        _log_result(result)
-
 # Log
 
 class Log:
@@ -387,6 +375,28 @@ def _show_help_info():
 def _show_version():
     Log.info(VERSION)
 
+
+def _check_single_file(lint_file):
+    physical_results = _check_physical_lines(lint_file)
+    logical_results = _check_logical_lines(lint_file)
+    ast_results = _check_ast(lint_file)
+
+    total_results = physical_results + logical_results + ast_results
+    # sort by line number
+    total_results.sort(key=lambda result: result[2][0])
+    for result in total_results:
+        _log_result(result)
+
+
+def _add_plugins(option):
+    plugin_file = option.split("=")[1]
+    plugin_module = __import__(plugin_file)
+    plugins = plugin_module.plugins
+
+    for lint_type in plugins:
+        for check in plugins[lint_type]:
+            ALL_CHECKS[lint_type].append(check)
+
 if __name__ == '__main__':
     lint_files = []
     commands = []
@@ -396,10 +406,10 @@ if __name__ == '__main__':
         sys.argv.remove("dinodon.py")
 
     for parm in sys.argv:
-        if parm.endswith(".py") and not parm.startswith("dinodon"):
-            lint_files.append(parm)
-        elif parm.startswith("--"):
+        if parm.startswith("--"):
             options.append(parm)
+        elif parm.endswith(".py") and parm != "dinodon.py":
+            lint_files.append(parm)
         else:
             commands.append(parm)
 
@@ -418,8 +428,15 @@ if __name__ == '__main__':
 
         # 4. run lint
         if "run" == commands[0]:
-            print()
+            if len(lint_files) == 0:
+                Log.error("No file to lint")
+            else:
+                for option in options:
+                    if option.startswith("--plugins="):
+                        _add_plugins(option)
+
+                for lint_file in lint_files:
+                    _check_single_file(lint_file)
     
     else:
-        # Log.error("Please run dinodon with a command")
-        _check_single_file("dinodon.py")
+        Log.error("Please run dinodon with a command")
