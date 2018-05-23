@@ -8,6 +8,9 @@ VERSION = "0.1.0"
 
 INDENT_REGEX = re.compile('(\t+)')
 EXTRANEOUS_WHITESPACE_REGEX = re.compile('[\[({] | [\]});:]')
+CLASS_NAMING = re.compile("^([A-Z][a-z]*)+$")
+# for function and variable
+COMMON_NAMING = re.compile("^_*([A-Z]+(_[A-Z]+)*|[a-z]+(_[a-z]+)*)$")
 
 # Violation
 
@@ -26,10 +29,12 @@ class ViolationType(Enum):
     BLANK_LINE_AFTER_DECORATOR = 7
     NOT_ENOUGH_BLANK_LINES = 8
     TOO_MANY_BLANK_LINES = 9
+    WRONG_NAMING = 10
+    HIGH_ORDER_FUNCTION_WITH_LAMBDA = 11
 
 #
 # Check functions:
-# Return type: tuple : (Level: ViolationLevel, 
+# Return type: tuple or [tuple] : (Level: ViolationLevel, 
 #               Type: ViolationType,
 #               Line info: (line_number: int, offset: int),
 #               Description: str)
@@ -67,10 +72,10 @@ def check_line_length(physical_line, line_number):
     # Test case:
     # a = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     
-    real_line = physical_line.lstrip()
+    real_line = physical_line.strip()
     length = len(real_line)
     
-    if length > 79:
+    if length > 80:
         # Ignore long shebang line
         if line_number == 0 and physical_line.startswith('#!'):
             return
@@ -150,10 +155,51 @@ def check_correct_blank_lines(logical_line, line_number, extar_params):
 
 def check_naming(node):
     # Test case:
-    # 
+    # aA, bB, cC, dD = 12, 12, 12, 12
+
+    names = []
+    is_common_naming = True
+
+    if isinstance(node, ast.ClassDef):
+        names = [(node, node.name)]
+        is_common_naming = False
+
+    if isinstance(node, ast.FunctionDef):
+        names = [(node, node.name)]
+
     if isinstance(node, ast.Assign):
-        return (ViolationLevel.ERROR, ViolationType.TOO_MANY_BLANK_LINES, \
-                    (node.lineno, 0), "Assign")
+        stack = node.targets
+        while len(stack):
+            n = stack.pop(0)
+            if isinstance(n, ast.Tuple):
+                stack += n.elts
+            if isinstance(n, ast.Name):
+                names.append((n, n.id))
+
+    results = []
+    for name_node, name in names:
+        match_obj = None
+        if is_common_naming:
+            match_obj = COMMON_NAMING.search(name)
+        else:
+            match_obj = CLASS_NAMING.search(name)
+        
+        if match_obj is None:
+            results.append((ViolationLevel.WARNING, ViolationType.WRONG_NAMING, \
+                    (name_node.lineno, name_node.col_offset), "Wrong format naming"))
+
+    return results
+
+
+def check_lambda_in_high_order_function(node):
+    # Test case:
+    # a = map(lambda x: x * x, b)
+
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+        and node.func.id == "map" and isinstance(node.args[0], ast.Lambda):
+            return (ViolationLevel.WARNING, ViolationType.HIGH_ORDER_FUNCTION_WITH_LAMBDA, \
+                    (node.lineno, node.col_offset), "Use lambda in high order function")
+
 
 # Core checks
 
@@ -166,7 +212,9 @@ ALL_CHECKS = {
         check_extraneous_whitespace,
         check_multiple_import,
         check_correct_blank_lines],
-    "ast": [check_naming]
+    "ast": [
+        check_naming,
+        check_lambda_in_high_order_function]
 }
 
 import sys
@@ -205,7 +253,10 @@ def _check_physical_lines(lint_file):
             for check in current_checks:
                 result = check(line, line_number)
                 if result is not None:
-                    results.append(result)
+                    if isinstance(result, list):
+                        results += result
+                    else:
+                        results.append(result)
 
     return results
 
@@ -222,7 +273,10 @@ def _check_logical_lines(lint_file):
             for check in current_checks:
                 result = check(line, line_number, _previous_logical)
                 if result is not None:
-                    results.append(result)
+                    if isinstance(result, list):
+                        results += result
+                    else:
+                        results.append(result)
 
             # set common logical info
             _previous_logical["previous_line"] = line
@@ -274,7 +328,10 @@ def _check_ast(lint_file):
             for check in current_checks:
                 result = check(node)
                 if result is not None:
-                    results.append(result)
+                    if isinstance(result, list):
+                        results += result
+                    else:
+                        results.append(result)
 
     return results
 
