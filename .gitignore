@@ -3,9 +3,4 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Demo file
-demo.py
-
 .vscode
-
-report/report.js
