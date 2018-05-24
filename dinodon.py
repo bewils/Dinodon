@@ -369,7 +369,10 @@ def _show_help_info():
     self-check: Run lint for dinodon itself
     help: Display general or command-specific help
     version: Display the current version of dinodon
-    run: Run lint for specific file""")
+    run: Run lint for specific file
+  Option:
+    --report: Generate a report for this check
+    --plugins=file: Add custom check rules in the file""")
 
 
 def _show_version():
