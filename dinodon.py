@@ -396,12 +396,14 @@ def _add_plugins(option):
         for check in plugins[lint_type]:
             ALL_CHECKS[lint_type].append(check)
 
+
 def _generate_report(results, code):
     report = []
     code_by_line = code.split("\n")
 
     for result in results:
         line_number = result[2][0]
+        start_linenumber = line_number
         # error line and before/after two lines
         if line_number < 3:
             code_around = [code_by_line[line_number - 1], code_by_line[line_number], \
@@ -410,6 +412,7 @@ def _generate_report(results, code):
             code_around = [code_by_line[line_number - 3], code_by_line[line_number - 2], \
                 code_by_line[line_number - 1], code_by_line[line_number], \
                 code_by_line[line_number + 1]]
+            start_linenumber = line_number - 2
 
         report.append({
             "level": result[0].value,
@@ -417,10 +420,11 @@ def _generate_report(results, code):
             "line_number": line_number,
             "column_offset": result[2][1],
             "description": result[3],
+            "start_line": start_linenumber,
             "code_around": code_around})
 
-    with open('report/report.json', 'w') as f:
-        f.write(json.dumps(report))
+    with open('report/report.js', 'w') as f:
+        f.write("var report = %s" % json.dumps(report))
 
 if __name__ == '__main__':
     lint_files = []
@@ -464,17 +468,17 @@ if __name__ == '__main__':
                         _add_plugins(option)
                     if option.startswith("--report"):
                         generate_report = True
-
+                
                 for lint_file in lint_files:
                     with open(lint_file, 'r') as f:
                         code = f.read()
 
                         total_results = _check_code(code)
-                        for result in total_results:
-                            _log_result(result)
-
                         if generate_report:
                             _generate_report(total_results, code)
+                        else:
+                            for result in total_results:
+                                _log_result(result)
 
     else:
         Log.error("Please run dinodon with a command")

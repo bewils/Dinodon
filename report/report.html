@@ -1,0 +1,210 @@
+<html>
+    <head>
+        <title>Report</title>
+        <!-- style sheet -->
+        <link href="bulma.min.css" rel="stylesheet">
+        <link href="bulma-docs.min.css" rel="stylesheet">
+        <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+        <style>
+            body {
+                background-color: #fafafa;
+            }
+            .bd-main {
+                padding: 2rem;
+            }
+            .section {
+                padding: 1.5rem;
+            }
+            .overall-columns .column {
+                height: calc(1.5rem + 22px);
+            }
+            .overall-columns .column strong {
+                height: 20px;
+            }
+            .overall-columns .column .progress {
+                margin: 3px 0;
+            }
+            ::selection {
+                color: white;
+                background-color: #3273dc;
+            }
+            details {
+                border-radius: 3px;
+                margin: 1em 0;
+                background-color: white;
+            }
+            summary {
+                background: #EEEEEE;
+                outline: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+            }
+        </style>
+        <!-- data file -->
+        <script src="report.js"></script>
+        <!-- render code -->
+        <link rel="stylesheet" href="code.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prettify/r298/prettify.min.js"></script>
+        <script type="text/javascript">
+            $(window).load(function () {
+                $('pre').addClass('prettyprint')
+                prettyPrint()
+            })
+        </script>
+        <style>
+            li.L0, li.L1, li.L2, li.L3, li.L5, li.L6, li.L7, li.L8 {
+                list-style-type: decimal !important;
+            }
+            .linenums {
+                margin-left: 30px;
+            }
+        </style>
+    </head>
+    <body>
+        <main class="bd-main">
+            <div class="container">
+                <div class="columns">
+                    <div class="column is-three-quarters">
+                        <h1 class="title">Report</h1>
+                        <h3 id="overall" class="title is-4 is-spaced bd-anchor-title">
+                            <span class="bd-anchor-name">Overall</span>
+                            <a class="bd-anchor-link" href="#overall">#</a>
+                        </h3>
+                        <section class="section">
+                            <div class="overall-columns columns">
+                                <div class="column">
+                                    <strong>Warnings: 0</strong>
+                                </div>
+                                <div class="column is-four-fifths">
+                                    <progress class="progress is-warning" value="0" max="100"></progress>
+                                </div>
+                            </div>
+                            <div class="overall-columns columns">
+                                <div class="column">
+                                    <strong>Errors: 0</strong>
+                                </div>
+                                <div class="column is-four-fifths">
+                                    <progress class="progress is-danger" value="0" max="100"></progress>
+                                </div>
+                            </div>
+                        </section>
+                        <hr>
+                        <h3 id="statistics" class="title is-4 is-spaced bd-anchor-title">
+                            <span class="bd-anchor-name">Statistics</span>
+                            <a class="bd-anchor-link" href="#statistics">#</a>
+                        </h3>
+                        <section class="section">
+                            <div style="padding: 15px; border-radius: 4px; background-color: white">
+                                <table class="table" style="width: 100%">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Count</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                        <hr>
+                        <h3 id="details" class="title is-4 is-spaced bd-anchor-title">
+                            <span class="bd-anchor-name">Details</span>
+                            <a class="bd-anchor-link" href="#details">#</a>
+                        </h3>
+                        <section class="section" id="details-container">
+                        </section>
+                    </div>
+                    <div id="side-nav" class="column">
+                        <nav id="anchors" class="bd-anchors is-active">
+                            <p class="bd-anchors-title">On this page</p>
+                            <ul class="bd-anchors-list">
+                                <li class="">
+                                    <a href="#overall">Overall</a>
+                                </li>
+                                <li class="">
+                                    <a href="#statistics">Statistics</a>
+                                </li>
+                                <li class="">
+                                    <a href="#details">Details</a>
+                                </li>
+                                <li>
+                                    <a>Back to top</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </body>
+    <script>
+        $(document).ready(function () {
+            warningCount = 0
+            errorCount = 0
+            statistics = {}
+
+            // generate all datas
+            for (result of report) {
+                if (result.level == 0) {
+                    warningCount += 1
+                } else if (result.level == 1) {
+                    errorCount += 1
+                }
+
+                if (statistics[result.type] == null) {
+                    statistics[result.type] = {count: 1, description: result.description, level: result.level ? "E" : "W"}
+                } else {
+                    statistics[result.type].count += 1
+                }
+            }
+
+            // overall
+            warningProgress = $(".progress:first")
+            warningProgress[0].value = warningCount
+            warningProgress.parent().siblings(".column").children("strong").text(`Warnings: ${warningCount}`)
+
+            errorProgress = $(".progress:last")
+            errorProgress[0].value = errorCount
+            errorProgress.parent().siblings(".column").children("strong").text(`Errors: ${errorCount}`)
+
+            if (Math.max(warningCount, errorCount) <= 10) {
+                warningProgress.attr("max", "10")
+                errorProgress.attr("max", "10")
+            }
+
+            // statistics
+            for (key of Object.keys(statistics).sort((a, b) => { Number(a) - Number(b) })) {
+                statistic = statistics[key]
+                $('tbody').append(`<tr><td>${statistic.level}${key}</td><td>${statistic.count}</td><td>${statistic.description}</td></tr>`)
+            }
+
+            // details
+            let index = 0
+            for (result of report) {
+                summary = `${result.level == 0 ? "W" : "E"}${result.type}: line ${result.line_number} column ${result.column_offset} -- [${result.description}]`
+
+                $("#details-container").append(`<details>
+                    <summary>${summary}</summary>
+                    <pre id="code${index}" class="linenums:${result.start_line}"><code>${result.code_around.join("\n")}</code></pre>
+            </details>
+                `)
+                
+                let local_index = index
+                let local_result = result
+                setTimeout(() => {
+                    let empty_string = new Array(local_result.column_offset + 1).join(" ")
+
+                    console.log(local_result.line_number - local_result.start_line)
+                    $(`#code${local_index} ol`).find("li")
+                        .eq(local_result.line_number - local_result.start_line)
+                        .append(`<p style="font-family: monospace; color: #E65100">${empty_string}^</p>`)
+                        .append(`<p style="font-family: monospace; color: #E65100">${empty_string}${local_result.description}</p>`)
+                }, 100)
+
+                index += 1
+            }
+        })
+    </script>
+</html>
