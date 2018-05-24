@@ -4,11 +4,11 @@ Dinodon 是一个静态 python 代码风格检查工具(毕不了业的毕业设
 
 使用环境: Python3 + Command Line
 
-#### 命名由来
+### 命名由来
 
 Dinodon(链蛇属). 无毒, 温和, 可以当做宠物饲养. 怀着把 python 变成 dinodon 的想法写了这个库
 
-#### 使用方法
+### 使用方法
 
 目前没有通过包管理工具发布, 可以 clone 下 master/tag 1.0 版本进行试用
 
@@ -77,7 +77,7 @@ anotherCamelNaming = "hhhhhhhh"
 
 这种情况下 `aCamelNaming` 不会被检测, `anotherCamelNaming` 则会检测出不合规范
 
-#### 核心检查
+### 核心检查
 
 核心检查部分分为三大类: 对 physical_line, logical_line 和 ast 的检查
 
@@ -117,11 +117,11 @@ def check_ast_function(node)
 #   Description: str)
 ```
 
-#### 结果数据
+### 结果数据
 
 在开启 `--report` 选项后实际上最后的检测结果会导出到 `report.js` 中, 可以自行使用该文件中的数据, 目前的 report 只是一个利用这个数据做的前端界面而已
 
-#### 写在最后
+### 写在最后
 
 第一次用 python 来一个完整的项目, 写到最后代码真是惨不忍睹, 明明自己代码写得这么烂还写了个工具来检查别人的代码质量(笑).
 
