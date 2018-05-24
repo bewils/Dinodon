@@ -59,6 +59,10 @@ def check_trailing_whitespace(physical_line, line_number):
 
     whitespace_charset = " \t\v"
     real_line = physical_line.rstrip(whitespace_charset)
+
+    if physical_line.lstrip(whitespace_charset).startswith("#"):
+        return
+
     if real_line != physical_line:
         if len(real_line) == 0:
             return (ViolationLevel.ERROR, ViolationType.BLANK_LINE_WHITESPACE, \
@@ -71,10 +75,10 @@ def check_trailing_whitespace(physical_line, line_number):
 def check_line_length(physical_line, line_number):
     # Test case:
     # a = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    
+
     real_line = physical_line.strip()
     length = len(real_line)
-    
+
     if length > 80:
         # Ignore long shebang line
         if line_number == 0 and physical_line.startswith('#!'):
@@ -83,7 +87,7 @@ def check_line_length(physical_line, line_number):
         # Ignore comments
         if real_line.startswith("#"):
             return
-        
+
         return (ViolationLevel.ERROR, ViolationType.LINE_TOO_LONG, \
             (line_number, 0), "Line too long")
 
@@ -99,7 +103,7 @@ _previous_logical = {
 def check_extraneous_whitespace(logical_line, line_number, extarParams):
     # Test case:
     # aaa( aa[1], {bb: 2})
-    
+
     # Ignore comment
     if logical_line.strip().startswith("#"):
         return
@@ -112,7 +116,7 @@ def check_extraneous_whitespace(logical_line, line_number, extarParams):
             char = text[0]
             return (ViolationLevel.ERROR, ViolationType.EXTRANEOUS_WHITESPACE, \
                 (line_number, offset), "Whitespace after %s" % char)
-        # \s])}:; 
+        # \s])}:;
         else:
             offset = match_obj.span()[1] - 1
             char = text[-1]
@@ -133,7 +137,7 @@ def check_multiple_import(logical_line, line_number, extarParams):
 def check_correct_blank_lines(logical_line, line_number, extar_params):
     # Test case:
     # def a():\n    return\ndef b(): \n    return 1
-    
+
     if logical_line == "\n":
         previous_line = extar_params["previous_line"].strip()
         if previous_line.startswith("@"):
@@ -183,7 +187,7 @@ def check_naming(node):
             match_obj = COMMON_NAMING.search(name)
         else:
             match_obj = CLASS_NAMING.search(name)
-        
+
         if match_obj is None:
             results.append((ViolationLevel.WARNING, ViolationType.WRONG_NAMING, \
                     (name_node.lineno, name_node.col_offset), "Wrong format naming"))
@@ -219,6 +223,7 @@ ALL_CHECKS = {
 
 import sys
 import copy
+import json
 
 # use `# dinodon:disable xxx` to disable a specific rule
 # use `# dinodon:enable xxx` to enable a specific rule
@@ -241,97 +246,92 @@ def _update_current_checks(lint_type, line, current_checks):
         return current_checks
 
 
-def _check_physical_lines(lint_file):
+def _check_physical_lines(code):
     results = []
 
-    with open(lint_file, 'r') as f:
-        current_checks = copy.deepcopy(ALL_CHECKS["physical_line"])
-        for (index, line) in enumerate(f.readlines()):
-            line_number = index + 1
-            current_checks = _update_current_checks("physical_line", line, current_checks)
-            
-            for check in current_checks:
-                result = check(line, line_number)
-                if result is not None:
-                    if isinstance(result, list):
-                        results += result
-                    else:
-                        results.append(result)
+    current_checks = copy.deepcopy(ALL_CHECKS["physical_line"])
+    for (index, line) in enumerate(code.split("\n")):
+        line_number = index + 1
+        current_checks = _update_current_checks("physical_line", line, current_checks)
+
+        for check in current_checks:
+            result = check(line, line_number)
+            if result is not None:
+                if isinstance(result, list):
+                    results += result
+                else:
+                    results.append(result)
 
     return results
 
 
-def _check_logical_lines(lint_file):
+def _check_logical_lines(code):
     results = []
 
-    with open(lint_file, 'r') as f:
-        current_checks = copy.deepcopy(ALL_CHECKS["logical_line"])
-        for (index, line) in enumerate(f.readlines()):
-            line_number = index + 1
-            current_checks = _update_current_checks("logical_line", line, current_checks)
-            
-            for check in current_checks:
-                result = check(line, line_number, _previous_logical)
-                if result is not None:
-                    if isinstance(result, list):
-                        results += result
-                    else:
-                        results.append(result)
+    current_checks = copy.deepcopy(ALL_CHECKS["logical_line"])
+    for (index, line) in enumerate(code.split("\n")):
+        line_number = index + 1
+        current_checks = _update_current_checks("logical_line", line, current_checks)
 
-            # set common logical info
-            _previous_logical["previous_line"] = line
+        for check in current_checks:
+            result = check(line, line_number, _previous_logical)
+            if result is not None:
+                if isinstance(result, list):
+                    results += result
+                else:
+                    results.append(result)
 
-            if line == "\n":
-                _previous_logical["blank_lines"] += 1
-            elif not line.strip().startswith("#"):
-                _previous_logical["blank_lines"] = 0
+        # set common logical info
+        _previous_logical["previous_line"] = line
 
-            if line.startswith("def"):
-                _previous_logical["previous_code_segment"] = "function"
-            elif line.startswith("class"):
-                _previous_logical["previous_code_segment"] = "class"
-            elif line != "\n" and line[0] != " ":
-                _previous_logical["previous_code_segment"] = "other"
+        if line == "":
+            _previous_logical["blank_lines"] += 1
+        elif not line.strip().startswith("#"):
+            _previous_logical["blank_lines"] = 0
+
+        if line.startswith("def"):
+            _previous_logical["previous_code_segment"] = "function"
+        elif line.startswith("class"):
+            _previous_logical["previous_code_segment"] = "class"
+        elif line != "" and line[0] != " ":
+            _previous_logical["previous_code_segment"] = "other"
 
     return results
 
 
-def _check_ast(lint_file):
+def _check_ast(code):
     results = []
+    root_node = ast.parse(code)
 
-    with open(lint_file, 'r') as f:
-        current_checks = copy.deepcopy(ALL_CHECKS["ast"])
+    current_checks = copy.deepcopy(ALL_CHECKS["ast"])
 
-        code = f.read()
-        root_node = ast.parse(code)
+    custom_configs = []
+    for (index, line) in enumerate(code.split("\n")):
+        line_number = index + 1
+        real_line = line.strip()
+        if real_line.startswith("# dinodon:"):
+            custom_configs.append((line_number, line))
 
-        custom_configs = []
-        for (index, line) in enumerate(code.split("\n")):
-            line_number = index + 1
-            real_line = line.strip()
-            if real_line.startswith("# dinodon:"):
-                custom_configs.append((line_number, line))
+    stack = [root_node]
+    while len(stack):
+        node = stack.pop()
 
-        stack = [root_node]
-        while len(stack):
-            node = stack.pop()
+        children = list(ast.iter_child_nodes(node))
+        children.reverse()
+        stack += children
 
-            children = list(ast.iter_child_nodes(node))
-            children.reverse()
-            stack += children
-            
-            if len(custom_configs) and hasattr(node, "lineno") \
-                and custom_configs[0][0] < node.lineno:
-                config_line = custom_configs.pop(0)
-                current_checks = _update_current_checks("ast", config_line[1], current_checks)
+        if len(custom_configs) and hasattr(node, "lineno") \
+            and custom_configs[0][0] < node.lineno:
+            config_line = custom_configs.pop(0)
+            current_checks = _update_current_checks("ast", config_line[1], current_checks)
 
-            for check in current_checks:
-                result = check(node)
-                if result is not None:
-                    if isinstance(result, list):
-                        results += result
-                    else:
-                        results.append(result)
+        for check in current_checks:
+            result = check(node)
+            if result is not None:
+                if isinstance(result, list):
+                    results += result
+                else:
+                    results.append(result)
 
     return results
 
@@ -376,16 +376,15 @@ def _show_version():
     Log.info(VERSION)
 
 
-def _check_single_file(lint_file):
-    physical_results = _check_physical_lines(lint_file)
-    logical_results = _check_logical_lines(lint_file)
-    ast_results = _check_ast(lint_file)
+def _check_code(code):
+    physical_results = _check_physical_lines(code)
+    logical_results = _check_logical_lines(code)
+    ast_results = _check_ast(code)
 
     total_results = physical_results + logical_results + ast_results
     # sort by line number
     total_results.sort(key=lambda result: result[2][0])
-    for result in total_results:
-        _log_result(result)
+    return total_results
 
 
 def _add_plugins(option):
@@ -396,6 +395,32 @@ def _add_plugins(option):
     for lint_type in plugins:
         for check in plugins[lint_type]:
             ALL_CHECKS[lint_type].append(check)
+
+def _generate_report(results, code):
+    report = []
+    code_by_line = code.split("\n")
+
+    for result in results:
+        line_number = result[2][0]
+        # error line and before/after two lines
+        if line_number < 3:
+            code_around = [code_by_line[line_number - 1], code_by_line[line_number], \
+                code_by_line[line_number + 1]]
+        else:
+            code_around = [code_by_line[line_number - 3], code_by_line[line_number - 2], \
+                code_by_line[line_number - 1], code_by_line[line_number], \
+                code_by_line[line_number + 1]]
+
+        report.append({
+            "level": result[0].value,
+            "type": result[1].value,
+            "line_number": line_number,
+            "column_offset": result[2][1],
+            "description": result[3],
+            "code_around": code_around})
+
+    with open('report/report.json', 'w') as f:
+        f.write(json.dumps(report))
 
 if __name__ == '__main__':
     lint_files = []
@@ -414,29 +439,42 @@ if __name__ == '__main__':
             commands.append(parm)
 
     if len(commands) > 0:
-        # 1. self check
-        if "self-check" == commands[0]:
-            _check_single_file("dinodon.py")
-
-        # 2. show help
+        # 1. show help
         if "help" == commands[0]:
             _show_help_info()
 
-        # 3. show version
+        # 2. show version
         if "version" == commands[0]:
             _show_version()
+
+        # 3. self check
+        if "self-check" == commands[0]:
+            commands[0] = "run"
+            lint_files = ["dinodon.py"]
 
         # 4. run lint
         if "run" == commands[0]:
             if len(lint_files) == 0:
                 Log.error("No file to lint")
             else:
+                generate_report = False
+
                 for option in options:
                     if option.startswith("--plugins="):
                         _add_plugins(option)
+                    if option.startswith("--report"):
+                        generate_report = True
 
                 for lint_file in lint_files:
-                    _check_single_file(lint_file)
-    
+                    with open(lint_file, 'r') as f:
+                        code = f.read()
+
+                        total_results = _check_code(code)
+                        for result in total_results:
+                            _log_result(result)
+
+                        if generate_report:
+                            _generate_report(total_results, code)
+
     else:
         Log.error("Please run dinodon with a command")

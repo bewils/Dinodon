@@ -7,3 +7,5 @@ __pycache__/
 demo.py
 
 .vscode
+
+report/report.json
