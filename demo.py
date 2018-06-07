@@ -46,7 +46,7 @@ def check_tabs(physical_line, line_number):
     # if True:\n\tb = 1\na = 2
 
     match_obj = INDENT_REGEX.search(physical_line)
-    if match_obj is not None:
+    if match_obj != None:
         offset = match_obj.span()[0]
         return (ViolationLevel.ERROR, ViolationType.HAS_TAB, (line_number, offset),
             "Indentation contains tabs")

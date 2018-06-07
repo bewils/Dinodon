@@ -343,7 +343,6 @@ class Log:
 
     def error(message):
         print("Error: %s" % message)
-        # return
 
     def warning(message):
         print("Warning: %s" % message)
@@ -426,7 +425,7 @@ def _generate_report(results, code):
             "start_line": start_linenumber,
             "code_around": code_around})
 
-    with open('report/report.js', 'w') as f:
+    with open("report/report.js", "w") as f:
         f.write("var report = %s" % json.dumps(report))
 
 if __name__ == '__main__':
@@ -471,7 +470,7 @@ if __name__ == '__main__':
                         _add_plugins(option)
                     if option.startswith("--report"):
                         generate_report = True
-                
+
                 for lint_file in lint_files:
                     with open(lint_file, 'r') as f:
                         code = f.read()
